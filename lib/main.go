@@ -25,7 +25,11 @@ func ApplyFromUrl(name string, namespace string, fileUrl string) (*string, error
 	filePath, err := ContentToFile(name, content)
 
 	// Apply the downloaded yaml to the currently configured cluster.
-	cmd := exec.Command("kubectl", "apply", "-n", namespace, "-f", filePath)
+	args := []string{"apply", "-f", filePath}
+	if namespace != "" {
+		args = append(args, "-n", namespace)
+	}
+	cmd := exec.Command("kubectl", args[:]...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return &content, fmt.Errorf("k8s apply was not successful: %s\n%s", err.Error(), output)

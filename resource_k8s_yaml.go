@@ -12,7 +12,7 @@ func k8sYaml() *schema.Resource {
 	return &schema.Resource{
 		Create: k8sYamlCreate,
 		Read:   k8sYamlRead,
-		Update: pkcsBundleUpdate,
+		Update: k8sYamlUpdate,
 		Delete: k8sYamlDelete,
 
 		Schema: map[string]*schema.Schema{
@@ -23,7 +23,7 @@ func k8sYaml() *schema.Resource {
 			"namespace": {
 				Type:     schema.TypeString,
 				Optional: true,
-				Default:  "default",
+				Default:  "",
 			},
 			"files": {
 				Type:     schema.TypeList,
@@ -93,7 +93,7 @@ func k8sYamlRead(d *schema.ResourceData, m interface{}) error {
 	return nil
 }
 
-func pkcsBundleUpdate(d *schema.ResourceData, m interface{}) error {
+func k8sYamlUpdate(d *schema.ResourceData, m interface{}) error {
 	return k8sYamlRead(d, m)
 }
 
@@ -112,7 +112,11 @@ func k8sYamlDelete(d *schema.ResourceData, m interface{}) error {
 			return errors.New("failed to send content to file")
 		}
 
-		cmd := exec.Command("kubectl", "delete", "-n", namespace, "-f", filePath)
+		args := []string{"delete", "-f", filePath}
+		if namespace != "" {
+			args = append(args, "-n", namespace)
+		}
+		cmd := exec.Command("kubectl", args[:]...)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("error removing resource: %s\n%s", err.Error(), output)
