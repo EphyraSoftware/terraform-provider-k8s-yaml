@@ -7,7 +7,7 @@ import (
 func Provider() *schema.Provider {
 	return &schema.Provider{
 		ResourcesMap: map[string]*schema.Resource{
-			"k8s_yaml": k8sYaml(),
+			"k8s-yaml_raw": k8sYaml(),
 		},
 	}
 }
