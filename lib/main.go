@@ -39,7 +39,7 @@ func ApplyFromFiles(name string, namespace string, files []string) (*string, err
 		}
 
 		content += bytes.NewBuffer(fileContent).String()
-		content += "\n"
+		content += "\n---\n" // Separate YAML blocks
 	}
 
 	filePath, err := ContentToFile(name, content)
