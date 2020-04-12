@@ -23,19 +23,31 @@ func ApplyFromUrl(name string, namespace string, fileUrl string) (*string, error
 	}
 
 	filePath, err := ContentToFile(name, content)
-
-	// Apply the downloaded yaml to the currently configured cluster.
-	args := []string{"apply", "-f", filePath}
-	if namespace != "" {
-		args = append(args, "-n", namespace)
-	}
-	cmd := exec.Command("kubectl", args[:]...)
-	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return &content, fmt.Errorf("k8s apply was not successful: %s\n%s", err.Error(), output)
+		return nil, fmt.Errorf("failed to create temporary file to apply: %s", err.Error())
 	}
 
-	return &content, nil
+	return applyFile(filePath, namespace, content)
+}
+
+func ApplyFromFiles(name string, namespace string, files []string) (*string, error) {
+	content := ""
+	for _, file := range files {
+		fileContent, err := ioutil.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file [%s]: %s", file, err.Error())
+		}
+
+		content += bytes.NewBuffer(fileContent).String()
+		content += "\n"
+	}
+
+	filePath, err := ContentToFile(name, content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary file to apply: %s", err.Error())
+	}
+
+	return applyFile(filePath, namespace, content)
 }
 
 func ContentToFile(name string, content string) (string, error) {
@@ -55,6 +67,21 @@ func ContentToFile(name string, content string) (string, error) {
 	}
 
 	return filePath, nil
+}
+
+func applyFile(filePath string, namespace string, content string) (*string, error) {
+	// Apply the downloaded yaml to the currently configured cluster.
+	args := []string{"apply", "-f", filePath}
+	if namespace != "" {
+		args = append(args, "-n", namespace)
+	}
+	cmd := exec.Command("kubectl", args[:]...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &content, fmt.Errorf("k8s apply was not successful: %s\n%s", err.Error(), output)
+	}
+
+	return &content, nil
 }
 
 func fetchFile(url url.URL) (string, error) {

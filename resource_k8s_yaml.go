@@ -36,7 +36,7 @@ func k8sYaml() *schema.Resource {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"downloaded_content": {
+			"collected_content": {
 				Type:     schema.TypeString,
 				Computed: true,
 				Optional: true,
@@ -56,29 +56,34 @@ func k8sYamlCreate(d *schema.ResourceData, m interface{}) error {
 		return errors.New("cannot specify both 'file_url' and 'files'")
 	}
 
+	applyFailed := false
+	var applyErr error
+	var fieldName string
+	var content *string
+
 	if isUrlSet(fileUrl) {
-		applyFailed := false
-		content, applyErr := lib.ApplyFromUrl(name, namespace, fileUrl)
-		if applyErr != nil {
-			applyFailed = true
-		}
-
-		err := d.Set("downloaded_content", content)
-		if err != nil {
-			return fmt.Errorf("error setting generated field: downloaded_content")
-		}
-
-		if applyErr != nil && applyFailed {
-			if content != nil {
-				// The apply got far enough to give back the content, assume the apply started and a partial resource may exist.
-				d.SetId(name)
-			}
-			return fmt.Errorf("apply failed: [%s]", applyErr.Error())
-		}
+		content, applyErr = lib.ApplyFromUrl(name, namespace, fileUrl)
 	} else if isFilesSet(files) {
-		return errors.New("apply files not implemented")
+		content, applyErr = lib.ApplyFromFiles(name, namespace, files)
 	} else {
 		return errors.New("one of 'files' or 'file_url' must be provided")
+	}
+
+	if applyErr != nil {
+		applyFailed = true
+	}
+
+	err := d.Set("collected_content", content)
+	if err != nil {
+		return fmt.Errorf("error setting generated field: [%s]", fieldName)
+	}
+
+	if applyErr != nil && applyFailed {
+		if content != nil {
+			// The apply got far enough to give back the content, assume the apply started and a partial resource may exist.
+			d.SetId(name)
+		}
+		return fmt.Errorf("apply failed: [%s]", applyErr.Error())
 	}
 
 	d.SetId(name)
@@ -101,30 +106,21 @@ func k8sYamlDelete(d *schema.ResourceData, m interface{}) error {
 	name := d.Get("name").(string)
 	namespace := d.Get("namespace").(string)
 
-	fileUrl := d.Get("file_url").(string)
-	files := extractFiles(d)
+	content := d.Get("collected_content").(string)
 
-	if isUrlSet(fileUrl) {
-		content := d.Get("downloaded_content").(string)
+	filePath, err := lib.ContentToFile(name, content)
+	if err != nil {
+		return errors.New("failed to send content to file")
+	}
 
-		filePath, err := lib.ContentToFile(name, content)
-		if err != nil {
-			return errors.New("failed to send content to file")
-		}
-
-		args := []string{"delete", "-f", filePath}
-		if namespace != "" {
-			args = append(args, "-n", namespace)
-		}
-		cmd := exec.Command("kubectl", args[:]...)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("error removing resource: %s\n%s", err.Error(), output)
-		}
-	} else if isFilesSet(files) {
-		return errors.New("delete files not implemented")
-	} else {
-		return errors.New("one of 'files' or 'file_url' must be provided")
+	args := []string{"delete", "-f", filePath}
+	if namespace != "" {
+		args = append(args, "-n", namespace)
+	}
+	cmd := exec.Command("kubectl", args[:]...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error removing resource: %s\n%s", err.Error(), output)
 	}
 
 	return nil
